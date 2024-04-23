@@ -511,6 +511,13 @@ void vcp_schedule_reset_work(struct vcp_work_struct *vcp_ws)
 {
 	if (mmup_enable_count() > 0)
 		queue_work(vcp_reset_workqueue, &vcp_ws->work);
+#if VCP_RECOVERY_SUPPORT
+	else {
+		mutex_lock(&vcp_A_notify_mutex);
+		__pm_relax(vcp_reset_lock);
+		mutex_unlock(&vcp_A_notify_mutex);
+	}
+#endif
 }
 
 #if VCP_LOGGER_ENABLE
@@ -636,8 +643,11 @@ static void vcp_wait_ready_timeout(struct timer_list *t)
 #if VCP_RECOVERY_SUPPORT
 	if (vcp_timeout_times < 10)
 		vcp_send_reset_wq(RESET_TYPE_TIMEOUT);
-	else
+	else {
+		mutex_lock(&vcp_A_notify_mutex);
 		__pm_relax(vcp_reset_lock);
+		mutex_unlock(&vcp_A_notify_mutex);
+	}
 #endif
 	vcp_timeout_times++;
 	pr_notice("[VCP] vcp_timeout_times=%x\n", vcp_timeout_times);
@@ -1967,8 +1977,8 @@ int vcp_register_feature(enum feature_id id)
 		if (feature_table[i].feature == id)
 			feature_table[i].enable++;
 	}
-	ret = vcp_enable_pm_clk(id);
 	mutex_unlock(&vcp_feature_mutex);
+	ret = vcp_enable_pm_clk(id);
 
 	return ret;
 }
@@ -1996,8 +2006,8 @@ int vcp_deregister_feature(enum feature_id id)
 			feature_table[i].enable--;
 		}
 	}
-	ret = vcp_disable_pm_clk(id);
 	mutex_unlock(&vcp_feature_mutex);
+	ret = vcp_disable_pm_clk(id);
 
 	return ret;
 }
